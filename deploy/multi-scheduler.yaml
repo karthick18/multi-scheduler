@@ -1,0 +1,277 @@
+# Copyright 2022 Ciena Corporation.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: multi-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  namespace: multi-system
+  name: multi-scheduler
+  labels:
+    app: multi-scheduler 
+    component: multi-scheduler
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: multi-scheduler
+subjects:
+- kind: ServiceAccount
+  name: multi-scheduler
+  namespace: multi-system
+roleRef:
+  kind: ClusterRole
+  apiGroup: rbac.authorization.k8s.io
+  name: system:kube-scheduler
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: multi-scheduler-pods
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "nodes", "endpoints"]
+    verbs: ["get", "watch", "list", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: multi-scheduler-pods
+subjects:
+  - kind: ServiceAccount
+    name: multi-scheduler
+    namespace: multi-system
+roleRef:
+  kind: ClusterRole
+  name: multi-scheduler-pods
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: multi-scheduler-plans
+rules:
+  - apiGroups: ["planner.ciena.io"]
+    resources: ["scheduleplans", "scheduletriggers"]
+    verbs: ["create", "delete", "get", "watch", "list", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: multi-scheduler-plans
+subjects:
+  - kind: ServiceAccount
+    name: multi-scheduler
+    namespace: multi-system
+roleRef:
+  kind: ClusterRole
+  name: multi-scheduler-plans
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: multi-scheduler-offers
+rules:
+  - apiGroups: ["constraint.ciena.com"]
+    resources: ["constraintpolicyoffers"]
+    verbs: ["create", "delete", "get", "watch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: multi-scheduler-offers
+subjects:
+  - kind: ServiceAccount
+    name: multi-scheduler
+    namespace: multi-system
+roleRef:
+  kind: ClusterRole
+  name: multi-scheduler-offers
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: multi-scheduler-policies
+rules:
+  - apiGroups: ["constraint.ciena.com"]
+    resources: ["constraintpolicies"]
+    verbs: ["create", "delete", "get", "watch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: multi-scheduler-policies
+subjects:
+  - kind: ServiceAccount
+    name: multi-scheduler
+    namespace: multi-system
+roleRef:
+  kind: ClusterRole
+  name: multi-scheduler-policies
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: multi-scheduler-bindings
+rules:
+  - apiGroups: ["constraint.ciena.com"]
+    resources: ["constraintpolicybindings"]
+    verbs: ["create", "delete", "get", "watch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: multi-scheduler-bindings
+subjects:
+  - kind: ServiceAccount
+    name: multi-scheduler
+    namespace: multi-system
+roleRef:
+  kind: ClusterRole
+  name: multi-scheduler-bindings
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: multi-scheduler-endpoints
+rules:
+  - apiGroups: [""]
+    resources: ["endpoints"]
+    verbs: ["get", "watch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: multi-scheduler-endpoints
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: multi-scheduler-endpoints
+subjects:
+- kind: ServiceAccount
+  name: multi-scheduler
+  namespace: multi-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: multi-scheduler-services
+rules:
+  - apiGroups: [""]
+    resources: ["services", "configmaps"]
+    verbs: ["get", "watch", "list"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses", "csinodes"]
+    verbs: ["get", "watch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: multi-scheduler-services
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: multi-scheduler-services
+subjects:
+- kind: ServiceAccount
+  name: multi-scheduler
+  namespace: multi-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: scheduler-config
+  namespace: multi-system
+data:
+  multi-scheduler-config.yaml: |
+    apiVersion: kubescheduler.config.k8s.io/v1beta2
+    kind: KubeSchedulerConfiguration
+    leaderElection:
+      leaderElect: false
+    profiles:
+    - schedulerName: multi-scheduler
+      plugins:
+        preFilter:
+          enabled:
+          - name: PodSetPlanner
+          - name: ConstraintPolicyScheduling
+        postFilter:
+          enabled:
+          - name: ConstraintPolicyScheduling
+          disabled:
+          - name: "*"
+        score:
+          enabled:
+          - name: ConstraintPolicyScheduling
+      pluginConfig:
+        - name: ConstraintPolicyScheduling
+          args:
+            minDelayOnFailure: "30s"
+            maxDelayOnFailure: "60s"
+            numRetriesOnFailure: 3
+            fallbackOnNoOffers: false
+            debug: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: multi-scheduler
+  namespace: multi-system
+  labels:
+    app: multi-scheduler
+    app.kubernetes.io/name: multi-scheduler
+    app.kubernetes.io/component: scheduler
+    app.kubernetes.io/part-of: multi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: multi-scheduler
+      app.kubernetes.io/name: multi-scheduler
+      app.kubernetes.io/component: scheduler
+      app.kubernetes.io/part-of: multi
+  template:
+    metadata:
+      namespace: multi-system
+      labels:
+        app: multi-scheduler
+        app.kubernetes.io/name: multi-scheduler
+        app.kubernetes.io/component: scheduler
+        app.kubernetes.io/part-of: multi
+    spec:
+      serviceAccount: multi-scheduler
+      containers:
+        - name: multi-scheduler
+          image: IMAGE_SPEC
+          imagePullPolicy: Always
+          args:
+            - "--config=/etc/kubernetes/multi/multi-scheduler-config.yaml"
+            - "--leader-elect=false"
+          volumeMounts:
+          - name: scheduler-config
+            mountPath: /etc/kubernetes/multi
+            readOnly: true
+      volumes:
+      - name: scheduler-config
+        configMap:
+          name: scheduler-config
